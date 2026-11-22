@@ -1,3 +1,4 @@
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/FatimaSalam29/CodeAlpha_MusicGenerationAI/blob/main/notebooks/Music_Generation_AI_Colab.ipynb)
 # 🎵 CodeAlpha Internship Project 3: Music Generation with AI
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
