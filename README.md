@@ -1,3 +1,4 @@
+**Live demo:** [Open in Google Colab](https://colab.research.google.com/github/FatimaSalam29/CodeAlpha_MusicGenerationAI/blob/main/notebooks/Music_Generation_AI_Colab.ipynb)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/FatimaSalam29/CodeAlpha_MusicGenerationAI/blob/main/notebooks/Music_Generation_AI_Colab.ipynb)
 # 🎵 CodeAlpha Internship Project 3: Music Generation with AI
 
