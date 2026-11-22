@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Music Generator</title>
+<style>
+:root{--bg:#0f1020;--card:#1a1b33;--ink:#f2f2fa;--mute:#9a9cc0;--a:#8b5cf6;--b:#22d3ee;--line:#2b2d52}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(1200px 600px at 20% -10%,#2a1b5c 0,transparent 60%),radial-gradient(900px 500px at 100% 0,#0e3a52 0,transparent 55%),var(--bg);color:var(--ink);min-height:100vh}
+.wrap{max-width:860px;margin:0 auto;padding:32px 16px 48px}
+h1{font-size:clamp(26px,5vw,40px);margin:0 0 6px;letter-spacing:-.02em}
+h1 span{background:linear-gradient(90deg,var(--a),var(--b));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--mute);margin:0 0 24px;line-height:1.5}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
+label{display:flex;justify-content:space-between;font-size:14px;color:var(--mute);margin-bottom:8px}
+label b{color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--a)}
+.btns{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+button{font:inherit;border:1px solid var(--line);background:#23244a;color:var(--ink);padding:11px 18px;border-radius:10px;cursor:pointer;transition:.15s}
+button:hover:not(:disabled){border-color:var(--a);transform:translateY(-1px)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.primary{background:linear-gradient(90deg,var(--a),#6366f1);border-color:transparent;font-weight:600}
+canvas{width:100%;height:220px;display:block;border-radius:10px;background:#12132a}
+.meta{display:flex;justify-content:space-between;color:var(--mute);font-size:13px;margin-top:10px;flex-wrap:wrap;gap:6px}
+.links a{color:var(--b);text-decoration:none;margin-right:16px}
+.links a:hover{text-decoration:underline}
+.note{color:var(--mute);font-size:13px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎵 <span>AI Music Generator</span></h1>
+  <p class="sub">Generate new classical-style piano music in your browser. Pick the settings, press Generate, then Play.</p>
+
+  <div class="card">
+    <div class="grid">
+      <div><label>Temperature (creativity) <b id="vT">0.8</b></label><input id="T" type="range" min="0.2" max="1.2" step="0.1" value="0.8"></div>
+      <div><label>Length (notes) <b id="vL">80</b></label><input id="L" type="range" min="20" max="200" step="10" value="80"></div>
+      <div><label>Tempo (BPM) <b id="vB">100</b></label><input id="B" type="range" min="60" max="160" step="5" value="100"></div>
+    </div>
+    <div class="btns">
+      <button class="primary" id="gen">✨ Generate</button>
+      <button id="play" disabled>▶ Play</button>
+      <button id="midi" disabled>⬇ MIDI</button>
+      <button id="wav" disabled>⬇ WAV</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <canvas id="roll" width="1600" height="440"></canvas>
+    <div class="meta"><span id="status">Press Generate to start.</span><span id="info"></span></div>
+  </div>
+
+  <div class="card note">
+    <b style="color:var(--ink)">How it works.</b>
+    The generator learns note-to-note transitions from the 5 public-domain MIDI pieces in this project
+    (Bach, Beethoven, Chopin, Mozart, Pachelbel) and samples new music with temperature-scaled probabilities:
+    low temperature = safe and repetitive, high temperature = adventurous.
+    This web version is a lightweight in-browser model so it runs instantly for everyone;
+    the full stacked-LSTM training pipeline is in the Colab notebook.
+    <div class="links" style="margin-top:12px">
+      <a href="https://github.com/FatimaSalam29/CodeAlpha_MusicGenerationAI" target="_blank" rel="noopener">GitHub repo</a>
+      <a href="https://colab.research.google.com/github/FatimaSalam29/CodeAlpha_MusicGenerationAI/blob/main/notebooks/Music_Generation_AI_Colab.ipynb" target="_blank" rel="noopener">Open LSTM notebook in Colab</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKENS = ["C4_0.5", "D4_0.5", "E4_0.5", "F4_0.5", "D4_0.5", "E4_0.5", "C4_0.5", "G4_1.0", "C5_1.0", "B4_0.5", "C5_0.5", "D5_1.0", "G4_1.0", "E4_0.5", "F4_0.5", "G4_0.5", "A4_0.5", "F4_0.5", "G4_0.5", "E4_0.5", "B4_1.0", "C5_1.5", "A4_0.5", "G4_0.5", "F4_0.5", "E4_1.0", "C4_2.0", "E4_2.0", "G4_2.0", "E4_1.0", "E4_1.0", "F4_1.0", "G4_1.0", "G4_1.0", "F4_1.0", "E4_1.0", "D4_1.0", "C4_1.0", "C4_1.0", "D4_1.0", "E4_1.0", "E4_1.5", "D4_0.5", "D4_2.0", "E4_1.0", "E4_1.0", "F4_1.0", "G4_1.0", "G4_1.0", "F4_1.0", "E4_1.0", "D4_1.0", "C4_1.0", "C4_1.0", "D4_1.0", "E4_1.0", "D4_1.5", "C4_0.5", "C4_2.0", "C4_3.0", "E4_3.0", "G4_3.0", "C5_3.0", "B4_3.0", "C5_0.5", "B4_0.5", "A#4_2.0", "B4_1.0", "A#4_1.0", "A4_2.5", "A#4_0.5", "A4_1.0", "G#4_2.0", "A4_1.0", "G#4_1.0", "G4_2.5", "G#4_0.5", "G4_1.0", "F#4_3.0", "G4_0.5", "F#4_0.5", "E3_4.0", "B3_4.0", "E4_4.0", "G4_4.0", "D3_4.0", "A3_4.0", "D4_4.0", "F#4_4.0", "B2_4.0", "F3_4.0", "B3_4.0", "D4_4.0", "E3_4.0", "B3_4.0", "E4_4.0", "C4_1.0", "C4_1.0", "G4_1.0", "G4_1.0", "A4_1.0", "A4_1.0", "G4_2.0", "F4_1.0", "F4_1.0", "E4_1.0", "E4_1.0", "D4_1.0", "D4_1.0", "C4_2.0", "G4_1.0", "G4_1.0", "F4_1.0", "F4_1.0", "E4_1.0", "E4_1.0", "D4_2.0", "G4_1.0", "G4_1.0", "F4_1.0", "F4_1.0", "E4_1.0", "E4_1.0", "D4_2.0", "C3_3.0", "E3_3.0", "G3_3.0", "C4_3.0", "D4_2.0", "F#4_2.0", "A4_2.0", "A3_2.0", "C#4_2.0", "E4_2.0", "B3_2.0", "D4_2.0", "F#4_2.0", "F#3_2.0", "A3_2.0", "C#4_2.0", "G3_2.0", "B3_2.0", "D4_2.0", "D3_2.0", "F#3_2.0", "A3_2.0", "G3_2.0", "B3_2.0", "D4_2.0", "A3_2.0", "C#4_2.0", "E4_2.0", "D5_1.0", "C#5_1.0", "B4_1.0", "A4_1.0", "G4_1.0", "F#4_1.0", "G4_1.0", "A4_1.0", "D5_0.5", "C#5_0.5", "D5_0.5", "D4_0.5", "A4_0.5", "G4_0.5", "A4_0.5", "C#4_0.5", "D3_4.0", "D4_4.0", "F#4_4.0", "A4_4.0", "D5_4.0"];
+
+/* ---------- parsing ---------- */
+const BASE = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+function noteToMidi(n){
+  const m = /^([A-G])([#\-b]?)(-?\d+)$/.exec(n);
+  const acc = m[2]==='#' ? 1 : (m[2]==='-'||m[2]==='b') ? -1 : 0;
+  return (parseInt(m[3],10)+1)*12 + BASE[m[1]] + acc;
+}
+function parseTok(t){
+  const i = t.lastIndexOf('_');
+  const p = t.slice(0,i), dur = parseFloat(t.slice(i+1));
+  return p === 'rest' ? {dur, pitches:[]} : {dur, pitches:p.split('.').map(noteToMidi)};
+}
+
+/* ---------- model: order-2 Markov chain learned from the dataset ---------- */
+const uni = {}, bi = {}, tri = {};
+function bump(map,key,tok){ (map[key] ||= {})[tok] = ((map[key]||{})[tok]||0)+1; }
+TOKENS.forEach((t,i)=>{
+  uni[t] = (uni[t]||0)+1;
+  if(i>=1) bump(bi, TOKENS[i-1], t);
+  if(i>=2) bump(tri, TOKENS[i-2]+'|'+TOKENS[i-1], t);
+});
+function pick(counts, T){
+  const ks = Object.keys(counts);
+  const w = ks.map(k => Math.pow(counts[k], 1/T));
+  let r = Math.random()*w.reduce((a,b)=>a+b,0);
+  for(let i=0;i<ks.length;i++){ r -= w[i]; if(r<=0) return ks[i]; }
+  return ks[ks.length-1];
+}
+function generate(len, T){
+  const s = 1 + Math.floor(Math.random()*(TOKENS.length-3));
+  let a = TOKENS[s-1], b = TOKENS[s];
+  const out = [a, b];
+  const wild = Math.max(0, T-0.8)*0.25;           // extra randomness at high temperature
+  while(out.length < len){
+    let c;
+    if(Math.random() < wild) c = pick(uni, T);
+    else {
+      const t3 = tri[a+'|'+b], t2 = bi[b];
+      c = t3 ? pick(t3,T) : t2 ? pick(t2,T) : pick(uni,T);
+    }
+    out.push(c); a = b; b = c;
+  }
+  return out.slice(0,len);
+}
+
+/* ---------- audio ---------- */
+function scheduleNote(ctx, dest, midi, start, dur, vel=0.5){
+  const f = 440*Math.pow(2,(midi-69)/12);
+  const g = ctx.createGain();
+  const end = start + Math.max(dur, 0.15);
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(vel, start+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, end+0.25);
+  g.connect(dest);
+  [[ 'triangle',1,1 ],[ 'sine',2,0.35 ],[ 'sine',3,0.12 ]].forEach(([type,mult,amp])=>{
+    const o = ctx.createOscillator(); o.type = type; o.frequency.value = f*mult;
+    const og = ctx.createGain(); og.gain.value = amp; o.connect(og); og.connect(g);
+    o.start(start); o.stop(end+0.3);
+  });
+}
+function buildTimeline(tokens, bpm){
+  const spb = 60/bpm; let t = 0; const notes = [];
+  tokens.forEach(tok=>{
+    const {dur,pitches} = parseTok(tok);
+    pitches.forEach(p=>notes.push({midi:p,start:t,dur:dur*spb}));
+    t += dur*spb;
+  });
+  return {notes,total:t};
+}
+function scheduleAll(ctx,dest,tl,offset=0){
+  const v = 0.55/Math.sqrt(3);
+  tl.notes.forEach(n=>scheduleNote(ctx,dest,n.midi,offset+n.start,n.dur,v));
+}
+
+/* ---------- exports ---------- */
+function vlq(v){ const b=[v&0x7f]; v>>=7; while(v>0){ b.push((v&0x7f)|0x80); v>>=7; } return b.reverse(); }
+function makeMidi(tokens,bpm){
+  const tpb=480, d=[]; const us=Math.round(60000000/bpm);
+  d.push(0,0xFF,0x51,3,(us>>16)&255,(us>>8)&255,us&255);
+  tokens.forEach(tok=>{
+    const {dur,pitches}=parseTok(tok); const ticks=Math.round(dur*tpb);
+    if(!pitches.length){ d.push(...vlq(ticks),0xFF,0x01,0); return; }
+    pitches.forEach(p=>d.push(0,0x90,p,80));
+    pitches.forEach((p,i)=>d.push(...vlq(i===0?ticks:0),0x80,p,0));
+  });
+  d.push(0,0xFF,0x2F,0);
+  const hdr=[0x4d,0x54,0x68,0x64,0,0,0,6,0,0,0,1,(tpb>>8)&255,tpb&255];
+  const n=d.length, trk=[0x4d,0x54,0x72,0x6b,(n>>24)&255,(n>>16)&255,(n>>8)&255,n&255];
+  return new Blob([new Uint8Array([...hdr,...trk,...d])],{type:'audio/midi'});
+}
+function makeWav(buf){
+  const ch=buf.getChannelData(0), n=ch.length, sr=buf.sampleRate;
+  const ab=new ArrayBuffer(44+n*2), v=new DataView(ab);
+  const w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  w(0,'RIFF'); v.setUint32(4,36+n*2,true); w(8,'WAVEfmt '); v.setUint32(16,16,true);
+  v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,sr,true);
+  v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,'data'); v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){ const s=Math.max(-1,Math.min(1,ch[i])); v.setInt16(44+i*2,s*32767,true); }
+  return new Blob([ab],{type:'audio/wav'});
+}
+function download(blob,name){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+let current=null, actx=null, playing=false, startAt=0, raf=0, stopTimer=0;
+
+['T','L','B'].forEach(k=>$(k).addEventListener('input',()=>{ $('v'+k).textContent=$(k).value; }));
+
+function drawRoll(tl, progress=-1){
+  const c=$('roll'), g=c.getContext('2d'), W=c.width, H=c.height;
+  g.clearRect(0,0,W,H);
+  const ms=tl.notes.map(n=>n.midi), lo=Math.min(...ms)-2, hi=Math.max(...ms)+2, rng=Math.max(12,hi-lo);
+  g.strokeStyle='#1f2147'; g.lineWidth=1;
+  for(let i=0;i<=8;i++){ const y=H*i/8; g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
+  const grad=g.createLinearGradient(0,0,W,0); grad.addColorStop(0,'#8b5cf6'); grad.addColorStop(1,'#22d3ee');
+  g.fillStyle=grad;
+  tl.notes.forEach(n=>{
+    const x=n.start/tl.total*W, w=Math.max(3,n.dur/tl.total*W-1);
+    const y=H-((n.midi-lo)/rng)*H, h=Math.max(5,H/rng-1);
+    g.beginPath(); g.roundRect(x,y-h,w,h,3); g.fill();
+  });
+  if(progress>=0){ g.fillStyle='rgba(255,255,255,.9)'; g.fillRect(progress*W-1,0,2,H); }
+}
+function setPlaying(p){ playing=p; $('play').textContent = p ? '⏹ Stop' : '▶ Play'; }
+function stop(){
+  cancelAnimationFrame(raf); clearTimeout(stopTimer);
+  if(actx){ actx.close(); actx=null; }
+  setPlaying(false); if(current) drawRoll(current.tl);
+}
+function tick(){
+  if(!playing||!actx) return;
+  const p=(actx.currentTime-startAt)/current.tl.total;
+  drawRoll(current.tl, Math.min(1,Math.max(0,p)));
+  raf=requestAnimationFrame(tick);
+}
+function play(){
+  stop();
+  actx=new (window.AudioContext||window.webkitAudioContext)();
+  const master=actx.createGain(); master.gain.value=0.9; master.connect(actx.destination);
+  startAt=actx.currentTime+0.1;
+  scheduleAll(actx,master,current.tl,startAt);
+  setPlaying(true); tick();
+  stopTimer=setTimeout(stop,(current.tl.total+1)*1000);
+}
+
+$('gen').onclick=()=>{
+  stop();
+  const T=+$('T').value, L=+$('L').value, B=+$('B').value;
+  const tokens=generate(L,T), tl=buildTimeline(tokens,B);
+  current={tokens,tl,bpm:B};
+  drawRoll(tl);
+  ['play','midi','wav'].forEach(i=>$(i).disabled=false);
+  $('status').textContent='Generated! Press Play to listen.';
+  $('info').textContent=`${tokens.length} notes · ${tl.total.toFixed(1)} s · T=${T}`;
+};
+$('play').onclick=()=>{ if(!current) return; playing ? stop() : play(); };
+$('midi').onclick=()=>download(makeMidi(current.tokens,current.bpm),'ai_music.mid');
+$('wav').onclick=async()=>{
+  $('status').textContent='Rendering WAV…';
+  const sr=44100, len=Math.ceil((current.tl.total+1.5)*sr);
+  const off=new OfflineAudioContext(1,len,sr);
+  const m=off.createGain(); m.gain.value=0.9; m.connect(off.destination);
+  scheduleAll(off,m,current.tl,0.05);
+  const buf=await off.startRendering();
+  download(makeWav(buf),'ai_music.wav');
+  $('status').textContent='WAV downloaded.';
+};
+</script>
+</body>
+</html>
